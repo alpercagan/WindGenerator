@@ -1,0 +1,17 @@
+[project]
+name = "WindGenerator"
+version = "0.1.0"
+description = "Wind audio synthesis using Spectrogram Diffusion"
+requires-python = ">=3.11"
+dependencies = [
+    "torch",
+    "torchaudio",
+    "librosa",
+    "diffusers",
+    "transformers",
+    "accelerate",
+    "soundfile",
+    "matplotlib",
+    "pandas",
+    "tqdm"
+]
