@@ -1,0 +1,82 @@
+=== Wind Dataset Audit Summary ===
+Data dir: /Users/alper/Datasets/wind_clean
+Metadata rows: 1966
+Clips present: 1966
+Clips missing: 0
+Duplicate filenames: 0
+
+RMS dBFS stats (metadata):
+     count: 1966
+       min: -43.336645
+       p05: -29.98681375
+    median: -20.396377
+       p95: -17.872171
+       max: -13.439748
+      mean: -21.62673175483215
+       std: 3.742555725224171
+
+RMS error from target (rms_dbfs - target_rms_db):
+  target_rms_db: -20.0
+     count: 1966
+       min: -23.336644999999997
+       p05: -9.98681375
+    median: -0.3963770000000011
+       p95: 2.1278289999999993
+       max: 6.560252
+      mean: -1.6267317548321463
+       std: 3.742555725224171
+
+Peak stats (metadata):
+     count: 1966
+       min: 0.034103
+       p05: 0.1843515
+    median: 0.435948
+       p95: 0.690864
+       max: 0.99
+      mean: 0.44190015920651066
+       std: 0.1498360340766072
+
+Duration stats (metadata):
+     count: 1966
+       min: 5.12
+       p05: 5.12
+    median: 5.12
+       p95: 5.12
+       max: 5.12
+      mean: 5.119999999999999
+       std: 8.884043905521977e-16
+
+Out SR stats (metadata):
+     count: 1966
+       min: 22050.0
+       p05: 22050.0
+    median: 22050.0
+       p95: 22050.0
+       max: 22050.0
+      mean: 22050.0
+       std: 0.0
+
+Heuristics:
+  Too quiet (< -45.0 dBFS): 0
+  Near clipping (peak >= 0.98): 20
+
+Top sources by number of clips:
+     108  /Users/alper/Datasets/wind_raw/Desert Howling Wind.mp3
+      82  /Users/alper/Datasets/wind_raw/Windy Forrest.mp3
+      76  /Users/alper/Datasets/wind_raw/WINDInt_Whistle Inside Room 01_B00M_ONE.wav
+      72  /Users/alper/Datasets/wind_raw/WindStorm_S011SSFX.400.wav
+      62  /Users/alper/Datasets/wind_raw/4 - Wind.mp3
+      61  /Users/alper/Datasets/wind_raw/WINDInt_Whistle Inside Room Heavy 01_B00M_ONE.wav
+      60  /Users/alper/Datasets/wind_raw/WIND_Suburban Quiet Wind 01_B00M_ONE.wav
+      51  /Users/alper/Datasets/wind_raw/WINDTonl_Attic Room Storm Whistle Heavy 01_B00M_ONE.wav
+      45  /Users/alper/Datasets/wind_raw/WINDDsgn_Howl And Noise 02_B00M_ONE.wav
+      45  /Users/alper/Datasets/wind_raw/WIND_Howl And Whistle 01_B00M_ONE.wav
+
+Outputs:
+  /Users/alper/Projects/WindGenerator/outputs/audit/audit_report.csv
+  /Users/alper/Projects/WindGenerator/outputs/audit/audit_summary.txt
+  /Users/alper/Projects/WindGenerator/outputs/audit/audit_hist_rms.png
+  /Users/alper/Projects/WindGenerator/outputs/audit/audit_hist_peak.png
+  /Users/alper/Projects/WindGenerator/outputs/audit/audit_hist_rms_error.png
+  /Users/alper/Projects/WindGenerator/outputs/audit/audit_source_counts.csv
+  /Users/alper/Projects/WindGenerator/outputs/audit/audit_samples  (listening samples)

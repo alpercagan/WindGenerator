@@ -1,8 +1,12 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
 [project]
-name = "WindGenerator"
+name = "windgen"
 version = "0.1.0"
-description = "Wind audio synthesis using Spectrogram Diffusion"
-requires-python = ">=3.11"
+description = "Wind sound generation with spectrogram diffusion"
+authors = [{name = "Alper"}]
 dependencies = [
     "torch",
     "torchaudio",
@@ -15,3 +19,9 @@ dependencies = [
     "pandas",
     "tqdm"
 ]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
