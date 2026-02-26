@@ -1,0 +1,16 @@
+{
+  "mel_config": {
+    "sr": 22050,
+    "n_fft": 1024,
+    "hop_length": 256,
+    "win_length": 1024,
+    "n_mels": 128,
+    "f_min": 20.0,
+    "eps": 1e-05
+  },
+  "logmel_mean_median": -4.114455699920654,
+  "logmel_std_median": 2.96455180644989,
+  "logmel_mean_mean": -4.164150911942125,
+  "logmel_std_mean": 3.1637115797400472,
+  "num_scanned": 400
+}
