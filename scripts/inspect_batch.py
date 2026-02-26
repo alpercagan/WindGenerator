@@ -33,6 +33,7 @@ def main():
     ds = WindMelDataset(
         DatasetConfig(data_dir=data_dir),
         MelSpecConfig(sr=22050, n_fft=1024, hop_length=256, win_length=1024, n_mels=128),
+        target_frames=440,
     )
 
     dl = DataLoader(ds, batch_size=8, shuffle=True, num_workers=0)

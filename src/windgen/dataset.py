@@ -19,7 +19,7 @@ class DatasetConfig:
 
 
 class WindMelDataset(Dataset):
-    def __init__(self, cfg: DatasetConfig, mel_cfg: MelSpecConfig):
+    def __init__(self, cfg: DatasetConfig, mel_cfg: MelSpecConfig, target_frames: int = 440):
         self.cfg = cfg
         self.data_dir = Path(os.path.expanduser(str(cfg.data_dir))).resolve()
         self.clips_dir = self.data_dir / cfg.clips_subdir
@@ -35,6 +35,7 @@ class WindMelDataset(Dataset):
             raise ValueError("metadata.csv must contain clip_filename column")
 
         self.extractor = LogMelExtractor(mel_cfg)
+        self.target_frames = int(target_frames)
 
     def __len__(self) -> int:
         return len(self.df)
@@ -46,6 +47,14 @@ class WindMelDataset(Dataset):
 
         wav = load_wav_mono_resample(clip_path, target_sr=self.extractor.cfg.sr)
         mel = self.extractor(wav)  # (1, 128, T)
+
+        # Force fixed time frames (crop or pad) to avoid UNet size mismatches
+        T = mel.shape[-1]
+        if T > self.target_frames:
+            mel = mel[..., : self.target_frames]
+        elif T < self.target_frames:
+            pad = self.target_frames - T
+            mel = torch.nn.functional.pad(mel, (0, pad), mode="constant", value=0.0)
 
         return {
             "mel": mel,
