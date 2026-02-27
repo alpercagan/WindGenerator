@@ -39,15 +39,21 @@ def main():
     dl = DataLoader(ds, batch_size=8, shuffle=True, num_workers=0)
     batch = next(iter(dl))
     mel = batch["mel"]  # (B, 1, 128, T)
+    sat = (mel.abs() >= 0.999).float().mean().item()
+    print("saturation fraction:", sat)
+    
 
     print("Batch mel shape:", tuple(mel.shape))
     print("min/max:", float(mel.min()), float(mel.max()))
     print("mean/std:", float(mel.mean()), float(mel.std()))
+    print(mel.min().item(), mel.max().item(), mel.mean().item(), mel.std().item())
 
     for i in range(min(4, mel.shape[0])):
         save_mel_image(mel[i], out_dir / f"mel_{i}.png", title=batch["clip_filename"][i])
 
     print(f"Saved images to: {out_dir}")
+    
+    
 
 
 if __name__ == "__main__":

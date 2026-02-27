@@ -20,3 +20,11 @@ All raw data passes through `scripts/prepare_dataset.py` which performs:
 1.  **Discovery:** Recursive search for `.wav`, `.mp3`, and `.flac`.
 2.  **Cleaning:** Silence trimming (Leading/Trailing) and RMS normalization.
 3.  **Segmentation:** Sliding window approach with 50% overlap to maximize training samples from long-form recordings.
+
+### Mel Config
+sr=22050
+n_fft=1024
+hop_length=256
+win_length=1024
+n_mels=128
+and diffusion uses fixed mel shape (1, 128, 440) → 440 frames
