@@ -38,7 +38,7 @@ class VocoderDataset(Dataset):
     """
 
     def __init__(self, clips_dir: str, mel_stats_path: str):
-        self.clips: List[Path] = sorted(Path(clips_dir).glob("*.wav"))
+        self.clips: List[Path] = sorted(Path(clips_dir).rglob("*.wav"))
         if not self.clips:
             raise FileNotFoundError(f"No WAV files found in {clips_dir}")
         self.mel_cfg = MelSpecConfig()
