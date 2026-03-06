@@ -136,8 +136,15 @@ def main():
                 pred_noise = model(x, t).sample
                 x = scheduler.step(pred_noise, t, x).prev_sample
 
-        # x is normalized mel in roughly [-1,1]
-        x_np = x.squeeze(0).squeeze(0).detach().cpu().numpy()  # (128, 440)
+        # x is (1, 1, 128, 440) — normalized mel in roughly [-1, 1]
+        assert x.shape[1] == 1, f"Expected channel dim=1, got shape {x.shape}"
+        x = x.squeeze(1)  # (1, 1, 128, 440) → (1, 128, 440)
+
+        if x.min() < -1.05 or x.max() > 1.05:
+            print(f"⚠️  Diffusion output outside expected range: min={x.min():.3f}, max={x.max():.3f}")
+        x = x.clamp(-1.0, 1.0)
+
+        x_np = x.squeeze(0).detach().cpu().numpy()  # (128, 440)
 
         # Undo training normalization:
         # training did: logmel -> z = (logmel-mean)/std -> clamp -> divide by clamp

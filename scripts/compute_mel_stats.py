@@ -13,6 +13,8 @@ import torchaudio
 import soundfile as sf
 from tqdm import tqdm
 
+from windgen.mels import MelSpecConfig, create_mel_transform
+
 
 def parse_args():
     ap = argparse.ArgumentParser()
@@ -27,6 +29,8 @@ def parse_args():
     ap.add_argument("--n_mels", type=int, default=128)
     ap.add_argument("--f_min", type=float, default=20.0)
     ap.add_argument("--eps", type=float, default=1e-5)
+    ap.add_argument("--f_max", type=float, default=None,
+                    help="Upper mel frequency bound (default: sr/2).")
     return ap.parse_args()
 
 
@@ -51,18 +55,19 @@ def main():
     out_path = Path(args.out).resolve()
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    mel = torchaudio.transforms.MelSpectrogram(
-        sample_rate=args.sr,
+    mel_cfg = MelSpecConfig(
+        sr=args.sr,
         n_fft=args.n_fft,
-        win_length=args.win_length,
         hop_length=args.hop_length,
+        win_length=args.win_length,
         n_mels=args.n_mels,
         f_min=args.f_min,
-        f_max=args.sr / 2,
-        power=2.0,
-        center=True,
-        pad_mode="reflect",
+        f_max=args.f_max,
+        eps=args.eps,
     )
+    f_max_resolved = mel_cfg.f_max if mel_cfg.f_max is not None else mel_cfg.sr / 2
+
+    mel = create_mel_transform(mel_cfg, torch.device("cpu"))
 
     means = []
     stds = []
@@ -77,8 +82,8 @@ def main():
             continue
         wav = load_wav(p, args.sr)
         with torch.no_grad():
-            m = mel(wav)                       # (1, n_mels, T)
-            logm = torch.log(m + args.eps)     # log-mel (NOT standardized)
+            m = mel(wav)                           # (1, n_mels, T)
+            logm = torch.log(m + mel_cfg.eps)      # log-mel (NOT standardized)
             means.append(float(logm.mean().item()))
             stds.append(float(logm.std().item()))
 
@@ -87,13 +92,18 @@ def main():
 
     stats = {
         "mel_config": {
-            "sr": args.sr,
-            "n_fft": args.n_fft,
-            "hop_length": args.hop_length,
-            "win_length": args.win_length,
-            "n_mels": args.n_mels,
-            "f_min": args.f_min,
-            "eps": args.eps,
+            "sr": mel_cfg.sr,
+            "n_fft": mel_cfg.n_fft,
+            "hop_length": mel_cfg.hop_length,
+            "win_length": mel_cfg.win_length,
+            "n_mels": mel_cfg.n_mels,
+            "f_min": mel_cfg.f_min,
+            "f_max": f_max_resolved,
+            "eps": mel_cfg.eps,
+            "mel_scale": "htk",
+            "norm": None,
+            "center": True,
+            "pad_mode": "reflect",
         },
         # typical per-clip log-mel stats
         "logmel_mean_median": float(np.median(means)),

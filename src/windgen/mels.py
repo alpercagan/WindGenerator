@@ -23,6 +23,37 @@ class MelSpecConfig:
     eps: float = 1e-5
 
 
+def _validate_mel_config(stored: dict, cfg: "MelSpecConfig") -> None:
+    """Raise ValueError if stored mel_stats.json config differs from cfg."""
+    f_max_cfg = cfg.f_max if cfg.f_max is not None else cfg.sr / 2
+    expected = {
+        "sr": cfg.sr,
+        "n_fft": cfg.n_fft,
+        "hop_length": cfg.hop_length,
+        "win_length": cfg.win_length,
+        "n_mels": cfg.n_mels,
+        "f_min": cfg.f_min,
+        "f_max": f_max_cfg,
+        "eps": cfg.eps,
+        "mel_scale": "htk",
+        "norm": None,
+        "center": True,
+        "pad_mode": "reflect",
+    }
+    mismatches = []
+    for key, val in expected.items():
+        if key not in stored:
+            continue  # old stats file missing this key — skip silently
+        if stored[key] != val:
+            mismatches.append(f"  {key}: stats={stored[key]!r}, config={val!r}")
+    if mismatches:
+        raise ValueError(
+            "mel_stats.json was computed with different parameters:\n"
+            + "\n".join(mismatches)
+            + "\nRecompute mel_stats.json to match the current MelSpecConfig."
+        )
+
+
 def create_mel_transform(cfg: MelSpecConfig, device: torch.device) -> torchaudio.transforms.MelSpectrogram:
     # f_max defaults to sr/2 if None
     f_max = cfg.f_max if cfg.f_max is not None else cfg.sr / 2
@@ -89,6 +120,8 @@ class LogMelExtractor:
             if not stats_path:
                 raise ValueError("stats_path is required when normalization='global'")
             stats = json.loads(Path(stats_path).read_text())
+            if "mel_config" in stats:
+                _validate_mel_config(stats["mel_config"], config)
             # robust medians
             self.global_mean = float(stats["logmel_mean_median"])
             self.global_std = float(stats["logmel_std_median"])
