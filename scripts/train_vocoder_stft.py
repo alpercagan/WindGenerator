@@ -9,6 +9,9 @@ import sys
 from pathlib import Path
 from typing import List, Tuple
 
+import shutil
+import subprocess
+
 import soundfile as sf
 import torch
 import torch.nn.functional as F
@@ -281,6 +284,30 @@ def main() -> None:
                 "target_frames": TARGET_FRAMES,
             }, str(ckpt_path))
             print(f"Saved checkpoint: {ckpt_path}")
+
+            # Backup to Kaggle persistent storage and push to GitHub
+            backup_dir = Path("/kaggle/working/saved_checkpoints/outputs")
+            backup_dir.mkdir(parents=True, exist_ok=True)
+            backup_path = backup_dir / ckpt_path.name
+            shutil.copy2(str(ckpt_path), str(backup_path))
+            print(f"Backed up checkpoint to: {backup_path}")
+            try:
+                repo_root = Path(__file__).resolve().parent.parent
+                subprocess.run(
+                    ["git", "add", str(backup_path)],
+                    cwd=str(repo_root), check=True,
+                )
+                subprocess.run(
+                    ["git", "commit", "-m", f"backup vocoder checkpoint step {global_step}"],
+                    cwd=str(repo_root), check=True,
+                )
+                subprocess.run(
+                    ["git", "push"],
+                    cwd=str(repo_root), check=True,
+                )
+                print(f"Pushed checkpoint backup to GitHub at step {global_step}")
+            except subprocess.CalledProcessError as e:
+                print(f"WARNING: GitHub backup failed at step {global_step}: {e}")
 
     # Final checkpoint (generator only)
     final_path = out_dir / "final_model.pt"
