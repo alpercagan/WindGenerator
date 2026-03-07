@@ -270,8 +270,8 @@ def main() -> None:
             sf.write(str(preview_path), wav_np, samplerate=22050)
             print(f"Saved preview: {preview_path}")
 
-        # Checkpoint every 2000 steps
-        if global_step % 2000 == 0:
+        # Checkpoint every 500 steps
+        if global_step % 500 == 0:
             ckpt_path = out_dir / f"ckpt_step_{global_step:06d}.pt"
             _state = gen.module if hasattr(gen, "module") else gen
             torch.save({
