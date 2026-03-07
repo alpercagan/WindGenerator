@@ -85,7 +85,23 @@ class VocoderDataset(Dataset):
 # ---------------------------------------------------------------------------
 
 def find_latest_checkpoint(out_dir: Path) -> Tuple[str | None, int]:
+    # Check for ckpt_step_latest.pt first
+    latest_fixed = out_dir / "ckpt_step_latest.pt"
+    if latest_fixed.exists():
+        try:
+            ckpt = torch.load(str(latest_fixed), map_location="cpu", weights_only=False)
+            if "gen" in ckpt:
+                step = int(ckpt.get("step", 0))
+                return str(latest_fixed), step
+            else:
+                print(f"Skipping {latest_fixed}: no 'gen' key (incompatible checkpoint)")
+        except Exception as e:
+            print(f"Skipping {latest_fixed}: failed to load ({e})")
+
+    # Fall back to numbered checkpoints
     ckpts = glob.glob(str(out_dir / "ckpt_step_*.pt"))
+    # Exclude the fixed-name file from the numbered search
+    ckpts = [p for p in ckpts if not p.endswith("ckpt_step_latest.pt")]
     if not ckpts:
         return None, 0
 
