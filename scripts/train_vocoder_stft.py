@@ -183,7 +183,7 @@ def main() -> None:
         dataset,
         batch_size=args.batch_size,
         shuffle=True,
-        num_workers=4,
+        num_workers=2,
         drop_last=True,
         pin_memory=(device.type == "cuda"),
         persistent_workers=True,
