@@ -147,6 +147,12 @@ def main() -> None:
     parser.add_argument("--resume", action="store_true", help="Resume from latest checkpoint")
     parser.add_argument("--max_steps", type=int, default=100000)
     parser.add_argument("--batch_size", type=int, default=16)
+    parser.add_argument(
+        "--drive_dir",
+        type=str,
+        default=None,
+        help="Google Drive directory for checkpoint persistence (Colab)",
+    )
     args = parser.parse_args()
 
     if torch.cuda.is_available():
@@ -159,6 +165,17 @@ def main() -> None:
 
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    # Restore from Google Drive if available (before resume logic reads out_dir)
+    if args.drive_dir is not None:
+        drive_ckpt = Path(args.drive_dir) / "latest_checkpoint.pt"
+        if drive_ckpt.exists():
+            dest = out_dir / "ckpt_step_latest.pt"
+            try:
+                shutil.copy2(str(drive_ckpt), str(dest))
+                print(f"Restored checkpoint from Drive: {drive_ckpt} -> {dest}")
+            except Exception as e:
+                print(f"WARNING: Could not restore from Drive: {e}")
 
     # Dataset & DataLoader
     dataset = VocoderDataset(clips_dir=args.data_dir, mel_stats_path=args.mel_stats)
@@ -308,6 +325,16 @@ def main() -> None:
                 print(f"Copied latest checkpoint to {kaggle_out}")
             except Exception as e:
                 print(f"WARNING: Kaggle backup failed at step {global_step}: {e}")
+
+            # Copy to Google Drive if --drive_dir was provided
+            if args.drive_dir is not None:
+                drive_out = Path(args.drive_dir) / "latest_checkpoint.pt"
+                try:
+                    Path(args.drive_dir).mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(str(ckpt_path), str(drive_out))
+                    print(f"💾 Backed up to Drive: {drive_out}")
+                except Exception as e:
+                    print(f"WARNING: Drive backup failed at step {global_step}: {e}")
 
     # Final checkpoint (generator only)
     final_path = out_dir / "final_model.pt"
