@@ -26,7 +26,7 @@ from windgen.vocoder_tiny import CombinedDisc, MultiResolutionSTFTLoss, TinyVoco
 
 TARGET_SAMPLES = 112640   # 440 frames × 256 hop_length
 TARGET_FRAMES  = 440
-GAN_WARMUP     = 1000     # steps of STFT-only before adversarial loss kicks in
+# No warmup — adversarial training from step 0. Generator is pretrained from Phase 1.
 
 
 # ---------------------------------------------------------------------------
@@ -253,10 +253,10 @@ def main() -> None:
     ])
 
     # Optimizers + schedulers
-    opt_G = torch.optim.AdamW(gen.parameters(),  lr=1e-4, betas=(0.8, 0.99))
-    opt_D = torch.optim.AdamW(disc.parameters(), lr=1e-4, betas=(0.8, 0.99))
-    scheduler_G = torch.optim.lr_scheduler.ExponentialLR(opt_G, gamma=0.99999)
-    scheduler_D = torch.optim.lr_scheduler.ExponentialLR(opt_D, gamma=0.99999)
+    opt_G = torch.optim.AdamW(gen.parameters(),  lr=2e-4, betas=(0.8, 0.99))
+    opt_D = torch.optim.AdamW(disc.parameters(), lr=2e-4, betas=(0.8, 0.99))
+    scheduler_G = torch.optim.lr_scheduler.ExponentialLR(opt_G, gamma=0.999)
+    scheduler_D = torch.optim.lr_scheduler.ExponentialLR(opt_D, gamma=0.999)
 
     start_step = 0
 
@@ -317,8 +317,7 @@ def main() -> None:
     assert mel_min >= -1.5 and mel_max <= 1.5, \
         f"Mel values out of expected range [-1.5, 1.5]: min={mel_min:.2f} max={mel_max:.2f}"
 
-    print(f"\nGAN_WARMUP: {GAN_WARMUP} steps (STFT-only before adversarial loss)")
-    print("All assertions passed. Starting training...\n")
+    print("All assertions passed. Adversarial training from step 0 (no warmup).\n")
 
     # -----------------------------------------------------------------------
     # Training loop
@@ -369,18 +368,13 @@ def main() -> None:
         y_hat = gen(mel)
         stft_loss = loss_fn(y_hat, audio)
 
-        if global_step >= GAN_WARMUP:
-            fake_results_g = disc(y_hat)
-            with torch.no_grad():
-                real_results_g = disc(audio)
+        fake_results_g = disc(y_hat)
+        with torch.no_grad():
+            real_results_g = disc(audio)
 
-            adv_loss = generator_adv_loss(fake_results_g)
-            fm_loss  = feature_matching_loss(real_results_g, fake_results_g)
-            g_loss   = 2.0 * stft_loss + 1.0 * adv_loss + 4.0 * fm_loss
-        else:
-            adv_loss = torch.tensor(0.0, device=device)
-            fm_loss  = torch.tensor(0.0, device=device)
-            g_loss   = stft_loss
+        adv_loss = generator_adv_loss(fake_results_g)
+        fm_loss  = feature_matching_loss(real_results_g, fake_results_g)
+        g_loss   = 45.0 * stft_loss + 1.0 * adv_loss + 2.0 * fm_loss
 
         opt_G.zero_grad()
         g_loss.backward()
@@ -405,9 +399,8 @@ def main() -> None:
             avg_d    = sum(d_history)    / len(d_history)
             lr_g = scheduler_G.get_last_lr()[0]
             flag = " WARNING" if (g_loss.item() != g_loss.item() or g_loss.item() > 1e4) else ""
-            warmup_tag = " [warmup]" if global_step < GAN_WARMUP else ""
             print(
-                f"Step {global_step:06d}/{args.max_steps}{warmup_tag} | "
+                f"Step {global_step:06d}/{args.max_steps} | "
                 f"stft={avg_stft:.4f}  adv={avg_adv:.4f}  "
                 f"fm={avg_fm:.4f}  d={avg_d:.4f}  "
                 f"lr_g={lr_g:.2e}{flag}"
