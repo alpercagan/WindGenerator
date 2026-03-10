@@ -157,14 +157,14 @@ class TinyVocoder(nn.Module):
 
 class LiteMPD(nn.Module):
     """
-    Lite Multi-Period Discriminator with periods [2, 3, 5].
+    Lite Multi-Period Discriminator with periods [2, 3, 5, 7, 11].
 
     Each sub-discriminator reshapes (B, T) → (B, 1, T//p, p) and applies
     a stack of 2D convolutions. forward() returns a list of (score, feature_maps)
     per sub-discriminator, where feature_maps is a list of intermediate
     activations BEFORE each activation function (used for feature matching loss).
     """
-    def __init__(self, periods: List[int] = [2, 3, 5]):
+    def __init__(self, periods: List[int] = [2, 3, 5, 7, 11]):
         super().__init__()
         self.periods = periods
         self.sub_discs = nn.ModuleList([self._make_sub_disc() for _ in periods])
@@ -174,9 +174,9 @@ class LiteMPD(nn.Module):
         layers = nn.ModuleList()
         for in_ch, out_ch in channel_pairs:
             layers.append(
-                nn.Conv2d(in_ch, out_ch, kernel_size=(5, 1), stride=(3, 1), padding=(2, 0))
+                weight_norm(nn.Conv2d(in_ch, out_ch, kernel_size=(5, 1), stride=(3, 1), padding=(2, 0)))
             )
-        layers.append(nn.Conv2d(128, 1, kernel_size=(3, 1), padding=(1, 0)))
+        layers.append(weight_norm(nn.Conv2d(128, 1, kernel_size=(3, 1), padding=(1, 0))))
         return layers
 
     def _forward_sub_disc(
@@ -212,3 +212,91 @@ class LiteMPD(nn.Module):
             self._forward_sub_disc(sub_disc, audio, p)
             for p, sub_disc in zip(self.periods, self.sub_discs)
         ]
+
+
+# -------------------------
+# Lite Multi-Scale Discriminator (MSD)
+# -------------------------
+
+class LiteMSD(nn.Module):
+    """
+    Lite Multi-Scale Discriminator for aperiodic texture audio (wind, rain, etc).
+
+    Processes audio at multiple temporal resolutions via average pooling
+    (scales=[1, 2, 4] → original, 2× downsampled, 4× downsampled).
+    Each scale uses a Conv1d stack to capture spectral envelope and temporal
+    amplitude modulation — the key characteristics of wind audio.
+
+    forward() returns a list of (score, feature_maps) per scale,
+    compatible with the same feature_matching_loss and discriminator_loss
+    functions used by LiteMPD.
+    """
+    def __init__(self, scales: List[int] = [1, 2, 4]):
+        super().__init__()
+        self.scales = scales
+        self.sub_discs = nn.ModuleList([self._make_sub_disc() for _ in scales])
+        self.pools = nn.ModuleList([
+            nn.Identity() if s == 1 else nn.AvgPool1d(kernel_size=s, stride=s)
+            for s in scales
+        ])
+
+    def _make_sub_disc(self) -> nn.ModuleList:
+        # Large kernels to capture spectral envelope at each temporal scale
+        layers = nn.ModuleList([
+            weight_norm(nn.Conv1d(1,   16,  kernel_size=15, stride=1, padding=7)),
+            weight_norm(nn.Conv1d(16,  32,  kernel_size=41, stride=4, padding=20, groups=4)),
+            weight_norm(nn.Conv1d(32,  64,  kernel_size=41, stride=4, padding=20, groups=16)),
+            weight_norm(nn.Conv1d(64,  128, kernel_size=41, stride=4, padding=20, groups=16)),
+            weight_norm(nn.Conv1d(128, 128, kernel_size=5,  stride=1, padding=2)),
+        ])
+        layers.append(weight_norm(nn.Conv1d(128, 1, kernel_size=3, stride=1, padding=1)))
+        return layers
+
+    def _forward_sub_disc(
+        self,
+        pool: nn.Module,
+        sub_disc: nn.ModuleList,
+        audio: torch.Tensor,
+    ) -> Tuple[torch.Tensor, List[torch.Tensor]]:
+        x = pool(audio.unsqueeze(1))  # (B, 1, T//scale)
+        feature_maps: List[torch.Tensor] = []
+        for conv in sub_disc[:-1]:
+            x = conv(x)
+            feature_maps.append(x)
+            x = F.leaky_relu(x, 0.1)
+        score = sub_disc[-1](x)
+        return score, feature_maps
+
+    def forward(
+        self, audio: torch.Tensor
+    ) -> List[Tuple[torch.Tensor, List[torch.Tensor]]]:
+        """
+        audio: (B, T)
+        returns: list of (score, feature_maps) per scale
+        """
+        return [
+            self._forward_sub_disc(pool, sub_disc, audio)
+            for pool, sub_disc in zip(self.pools, self.sub_discs)
+        ]
+
+
+class CombinedDisc(nn.Module):
+    """
+    Combined MPD + MSD discriminator.
+
+    Returns concatenated list of (score, feature_maps) from both discriminators.
+    Drop-in replacement for LiteMPD: same forward() interface, more sub-discriminators.
+    """
+    def __init__(
+        self,
+        periods: List[int] = [2, 3, 5, 7, 11],
+        scales: List[int] = [1, 2, 4],
+    ):
+        super().__init__()
+        self.mpd = LiteMPD(periods=periods)
+        self.msd = LiteMSD(scales=scales)
+
+    def forward(
+        self, audio: torch.Tensor
+    ) -> List[Tuple[torch.Tensor, List[torch.Tensor]]]:
+        return self.mpd(audio) + self.msd(audio)

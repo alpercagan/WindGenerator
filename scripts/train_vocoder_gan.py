@@ -22,7 +22,7 @@ warnings.filterwarnings("ignore", message="An output with one or more elements w
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from windgen.mels import LogMelExtractor, MelSpecConfig, load_wav_mono_resample
-from windgen.vocoder_tiny import LiteMPD, MultiResolutionSTFTLoss, TinyVocoder
+from windgen.vocoder_tiny import CombinedDisc, MultiResolutionSTFTLoss, TinyVocoder
 
 TARGET_SAMPLES = 112640   # 440 frames × 256 hop_length
 TARGET_FRAMES  = 440
@@ -239,7 +239,7 @@ def main() -> None:
 
     # Models
     gen  = TinyVocoder(n_mels=128, base_ch=256).to(device)
-    disc = LiteMPD(periods=[2, 3, 5]).to(device)
+    disc = CombinedDisc(periods=[2, 3, 5, 7, 11], scales=[1, 2, 4]).to(device)
     if torch.cuda.device_count() > 1:
         print(f"Using {torch.cuda.device_count()} GPUs")
         gen  = torch.nn.DataParallel(gen)
@@ -373,11 +373,12 @@ def main() -> None:
 
         if global_step >= GAN_WARMUP:
             fake_results_g = disc(y_hat)
-            real_results_g = disc(audio)
+            with torch.no_grad():
+                real_results_g = disc(audio)
 
             adv_loss = generator_adv_loss(fake_results_g)
             fm_loss  = feature_matching_loss(real_results_g, fake_results_g)
-            g_loss   = stft_loss + 1.0 * adv_loss + 2.0 * fm_loss
+            g_loss   = stft_loss + 1.0 * adv_loss + 10.0 * fm_loss
         else:
             adv_loss = torch.tensor(0.0, device=device)
             fm_loss  = torch.tensor(0.0, device=device)
