@@ -345,25 +345,23 @@ def main() -> None:
         disc.train()
 
         # -------------------------------------------------------------------
-        # 1. Discriminator update (only after warmup)
+        # 1. Discriminator update (every step)
         # -------------------------------------------------------------------
-        d_loss_val = 0.0
-        if global_step >= GAN_WARMUP:
-            with torch.no_grad():
-                y_hat_d = gen(mel)
+        with torch.no_grad():
+            y_hat_d = gen(mel)
 
-            real_results_d = disc(audio)
-            fake_results_d = disc(y_hat_d)
+        real_results_d = disc(audio)
+        fake_results_d = disc(y_hat_d)
 
-            d_loss = discriminator_loss(real_results_d, fake_results_d)
+        d_loss = discriminator_loss(real_results_d, fake_results_d)
 
-            opt_D.zero_grad()
-            d_loss.backward()
-            torch.nn.utils.clip_grad_norm_(disc.parameters(), 5.0)
-            opt_D.step()
-            scheduler_D.step()
+        opt_D.zero_grad()
+        d_loss.backward()
+        torch.nn.utils.clip_grad_norm_(disc.parameters(), 5.0)
+        opt_D.step()
+        scheduler_D.step()
 
-            d_loss_val = d_loss.item()
+        d_loss_val = d_loss.item()
 
         # -------------------------------------------------------------------
         # 2. Generator update
