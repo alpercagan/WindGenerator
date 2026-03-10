@@ -376,7 +376,7 @@ def main() -> None:
 
             adv_loss = generator_adv_loss(fake_results_g)
             fm_loss  = feature_matching_loss(real_results_g, fake_results_g)
-            g_loss   = stft_loss + 1.0 * adv_loss + 10.0 * fm_loss
+            g_loss   = 2.0 * stft_loss + 1.0 * adv_loss + 4.0 * fm_loss
         else:
             adv_loss = torch.tensor(0.0, device=device)
             fm_loss  = torch.tensor(0.0, device=device)
