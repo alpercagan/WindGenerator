@@ -236,6 +236,7 @@ def main() -> None:
         pin_memory=(device.type == "cuda"),
         persistent_workers=True,
     )
+    steps_per_epoch = len(loader)
 
     # Models
     gen  = TinyVocoder(n_mels=128, base_ch=256).to(device)
@@ -358,7 +359,8 @@ def main() -> None:
         d_loss.backward()
         torch.nn.utils.clip_grad_norm_(disc.parameters(), 5.0)
         opt_D.step()
-        scheduler_D.step()
+        if global_step % steps_per_epoch == 0:
+            scheduler_D.step()
 
         d_loss_val = d_loss.item()
 
@@ -380,7 +382,8 @@ def main() -> None:
         g_loss.backward()
         torch.nn.utils.clip_grad_norm_(gen.parameters(), 5.0)
         opt_G.step()
-        scheduler_G.step()
+        if global_step % steps_per_epoch == 0:
+            scheduler_G.step()
 
         global_step += 1
 
