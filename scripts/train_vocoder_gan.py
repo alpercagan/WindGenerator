@@ -331,6 +331,9 @@ def main() -> None:
     fm_history:   collections.deque = collections.deque(maxlen=500)
     d_history:    collections.deque = collections.deque(maxlen=500)
 
+    # Discriminator strength safety: track d_loss at each 500-step checkpoint
+    d_ckpt_history: collections.deque = collections.deque(maxlen=3)
+
     while global_step < args.max_steps:
         try:
             mel, audio = next(loader_iter)
@@ -448,6 +451,16 @@ def main() -> None:
                 print(f"Copied latest checkpoint to {kaggle_out}")
             except Exception as e:
                 print(f"WARNING: Kaggle backup failed at step {global_step}: {e}")
+
+            # Discriminator strength safety check
+            avg_d_ckpt = sum(d_history) / len(d_history) if d_history else 1.0
+            d_ckpt_history.append(avg_d_ckpt)
+            if len(d_ckpt_history) == 3 and all(v < 0.1 for v in d_ckpt_history):
+                for pg in opt_D.param_groups:
+                    pg["lr"] *= 0.5
+                new_d_lr = opt_D.param_groups[0]["lr"]
+                print(f"⚠️ Discriminator too strong, reducing D lr to {new_d_lr:.2e}")
+                d_ckpt_history.clear()
 
             # Google Drive backup
             if args.drive_dir is not None:
