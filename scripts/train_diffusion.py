@@ -2,12 +2,12 @@
 """
 train_diffusion.py
 
-MPS-friendly baseline DDPM training on log-mel "images".
+MPS-friendly DDPM training on log-mel "images".
 
 Key features:
 - Fixed mel shape: (1, 128, 440)
 - Attention-free UNet mid-block (no attention)
-- Small UNet + gradient checkpointing
+- ~11M parameter UNet + gradient checkpointing
 - Batch size = 1 with gradient accumulation (stable on Apple MPS)
 - Periodic sampling (saves mel grids as PNG)
 - Periodic checkpoint saving
@@ -83,12 +83,15 @@ def main():
     # -------------------------
     H, W = 128, target_frames
 
+    # ~11M parameter UNet — 3 levels to keep 440-wide input divisible by 2³=8.
+    # block_out_channels=(64,128,256) with layers_per_block=2 is the minimum
+    # config that comfortably exceeds 10M params while staying attention-free.
     model = UNet2DModel(
         sample_size=(H, W),
         in_channels=1,
         out_channels=1,
-        layers_per_block=1,
-        block_out_channels=(16, 32, 64),
+        layers_per_block=2,
+        block_out_channels=(64, 128, 256),
         down_block_types=("DownBlock2D", "DownBlock2D", "DownBlock2D"),
         up_block_types=("UpBlock2D", "UpBlock2D", "UpBlock2D"),
         mid_block_type="UNetMidBlock2D",  # no attention
@@ -106,7 +109,7 @@ def main():
     lr = 2e-4
     optim = torch.optim.AdamW(model.parameters(), lr=lr)
 
-    steps = 3000               # keep as you planned
+    steps = 100_000
     grad_accum_steps = 8       # effective batch ~ 8
     log_every = 50
     sample_every = 500

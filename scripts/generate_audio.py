@@ -59,13 +59,13 @@ def select_device(device_arg: str) -> torch.device:
 # ---------------------------------------------------------------------------
 
 def _build_unet(device: torch.device) -> UNet2DModel:
-    """Construct UNet2DModel matching the training configuration."""
+    """Construct UNet2DModel matching the training configuration (~11M params)."""
     return UNet2DModel(
         sample_size=(MEL_H, MEL_W),
         in_channels=1,
         out_channels=1,
-        layers_per_block=1,
-        block_out_channels=(16, 32, 64),
+        layers_per_block=2,
+        block_out_channels=(64, 128, 256),
         down_block_types=("DownBlock2D", "DownBlock2D", "DownBlock2D"),
         up_block_types=("UpBlock2D", "UpBlock2D", "UpBlock2D"),
         mid_block_type="UNetMidBlock2D",
