@@ -98,6 +98,9 @@ def main():
         norm_num_groups=8,
     ).to(device)
 
+    total_params = sum(p.numel() for p in model.parameters())
+    print(f"UNet parameters: {total_params:,}")
+
     # Big memory saver on MPS (compute-heavy but worth it)
     model.enable_gradient_checkpointing()
 
