@@ -166,8 +166,7 @@ if __name__ == "__main__":
 
         timesteps = torch.randint(
             0, noise_scheduler.config.num_train_timesteps, (bsz,), device=device
-        ).long() # 0 ile 1000 arasında rastgele tam sayılar üret, (bsz,) şeklinde." Buradaki (bsz,) üretilecek tensörün şekli — yani kaç tane ve nasıl düzenli rastgele sayı istediğin
-
+        ).long() # 0 ile 1000 arasında rastgele tam sayılar üret, (bsz,) şeklinde."
         noise = torch.randn_like(x0)
         xt = noise_scheduler.add_noise(x0, noise, timesteps).to(device)
 
