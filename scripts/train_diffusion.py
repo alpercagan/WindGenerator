@@ -117,7 +117,7 @@ if __name__ == "__main__":
         block_out_channels=(32, 64, 128),
         down_block_types=("DownBlock2D", "DownBlock2D", "DownBlock2D"),
         up_block_types=("UpBlock2D", "UpBlock2D", "UpBlock2D"),
-        mid_block_type="UNetMidBlock2D",  # no attention
+        mid_block_type="UNetMidBlock2D", 
         norm_num_groups=8,
     )
     model = model.to(device)
