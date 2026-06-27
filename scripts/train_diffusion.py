@@ -105,7 +105,7 @@ if __name__ == "__main__":
     )
 
     # -------------------------
-    # Model (small + no attention)
+    # Model
     # -------------------------
     H, W = 128, target_frames
 
