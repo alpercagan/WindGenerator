@@ -6,9 +6,8 @@ DDPM training on log-mel "images".
 
 Key features:
 - Fixed mel shape: (1, 128, 440)
-- Lightweight ~2.5M parameter UNet (attention-free)
+- Lightweight ~2.5M parameter UNet
 - Mixed-precision training (AMP) on CUDA
-- Periodic sampling (saves mel grids as PNG)
 - Periodic checkpoint saving
 
 Run:
