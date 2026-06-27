@@ -170,7 +170,7 @@ if __name__ == "__main__":
         noise = torch.randn_like(x0)
         xt = noise_scheduler.add_noise(x0, noise, timesteps).to(device)
 
-        with torch.amp.autocast("cuda", enabled=(device.type == "cuda")):
+        with torch.amp.autocast("cuda", enabled=(device.type == "cuda")): # hız kazancının asıl geldiği yer forward'daki ağır conv/matmul hesapları — onları float16'da yapmak ciddi hızlanma.
             pred = model(xt, timesteps).sample
             loss = torch.mean((pred - noise) ** 2)
 
