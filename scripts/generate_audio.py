@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""End-to-end wind audio generation: diffusion mel → Griffin-Lim → WAV."""
+
+
 from __future__ import annotations
 
 import argparse
@@ -115,17 +116,6 @@ def run_diffusion(
 
 
 def mel_to_audio(mel: torch.Tensor, mel_mean: float, mel_std: float) -> np.ndarray:
-    """
-    Denormalize a mel spectrogram and reconstruct audio via Griffin-Lim.
-
-    Args:
-        mel:      (1, 128, 440) normalized mel in [-1, 1]
-        mel_mean: log-mel mean used during training normalization
-        mel_std:  log-mel std used during training normalization
-
-    Returns:
-        waveform as float32 numpy array
-    """
     eps = 1e-5
     # Reverse [-1, 1] scaling → z-score → linear amplitude
     x = mel * (4.0 * mel_std) + mel_mean
@@ -162,11 +152,6 @@ def _rms(x: np.ndarray) -> float:
 
 
 def crossfade_with_self(segment: np.ndarray, crossfade_len: int) -> np.ndarray:
-    """
-    Overlap-add a segment with a copy of itself, matching RMS before joining.
-
-    Output length = 2 * n - crossfade_len  (≈ 9.7 s for n=112640, fade=11025)
-    """
     n = len(segment)
     if crossfade_len >= n:
         raise ValueError(f"crossfade_len ({crossfade_len}) must be < segment length ({n})")
