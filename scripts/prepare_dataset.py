@@ -1,22 +1,5 @@
 #!/usr/bin/env python3
-"""
-prepare_dataset.py
 
-Preprocess a folder of wind recordings into a clean dataset of fixed-length clips.
-
-Pipeline:
-1) Discover audio files (.wav/.mp3/.flac) recursively under input_dir
-2) Load audio, resample to target SR, convert to mono
-3) Trim leading/trailing dead air (librosa.effects.trim)
-4) RMS-normalize to a target dBFS (with anti-clipping safeguard)
-5) Chunk into fixed-length clips with overlap
-6) Skip chunks that are too quiet
-7) Save as 16-bit PCM WAV + write metadata.csv
-
-Notes:
-- MP3 decoding may require ffmpeg installed on your system.
-- This script NEVER modifies your raw files. It only reads input_dir and writes output_dir.
-"""
 
 from __future__ import annotations
 
@@ -33,7 +16,7 @@ import numpy as np
 import soundfile as sf
 from tqdm import tqdm
 
-# librosa is convenient for resampling + trimming + audio loading.
+
 import librosa
 
 
@@ -81,21 +64,12 @@ def discover_audio_files(input_dir: Path) -> List[Path]:
 
 
 def load_audio_mono_resampled(path: Path, target_sr: int) -> Tuple[np.ndarray, int]:
-    """
-    Load audio from file, return mono float32 in [-1, 1] and the original sr.
-    We resample to target_sr inside librosa.load.
-    """
-    # librosa.load returns float32 mono by default if mono=True
     y, sr = librosa.load(str(path), sr=target_sr, mono=True)
     y = np.asarray(y, dtype=np.float32)
     return y, sr
 
 
 def trim_dead_air(y: np.ndarray, top_db: float) -> Tuple[np.ndarray, Tuple[int, int]]:
-    """
-    Trim leading/trailing silence using librosa.effects.trim.
-    top_db is relative to peak: higher => more trimming.
-    """
     if y.size == 0:
         return y, (0, 0)
     yt, idx = librosa.effects.trim(y, top_db=top_db)
@@ -103,13 +77,6 @@ def trim_dead_air(y: np.ndarray, top_db: float) -> Tuple[np.ndarray, Tuple[int, 
 
 
 def rms_normalize(y: np.ndarray, target_rms_dbfs: float, clip_peak: float = 0.99) -> Tuple[np.ndarray, float, float]:
-    """
-    RMS normalize to target dBFS.
-    Anti-clipping: if peak exceeds clip_peak, scale down to fit.
-
-    Returns:
-      y_out, rms_dbfs_after, peak_after
-    """
     if y.size == 0:
         return y, -120.0, 0.0
 
@@ -117,7 +84,6 @@ def rms_normalize(y: np.ndarray, target_rms_dbfs: float, clip_peak: float = 0.99
     target_rms = rms_from_dbfs(target_rms_dbfs)
 
     if current_rms < 1e-10:
-        # Basically silence: return unchanged (will likely be skipped later)
         return y, dbfs_from_rms(current_rms), peak_abs(y)
 
     gain = target_rms / current_rms
@@ -138,9 +104,7 @@ def chunk_signal(
     clip_seconds: float,
     overlap: float,
 ) -> Iterable[Tuple[np.ndarray, float]]:
-    """
-    Yield (chunk, start_time_sec) for fixed-length chunks with overlap.
-    """
+   
     assert 0.0 <= overlap < 1.0, "overlap must be in [0, 1)"
     clip_len = int(round(clip_seconds * sr))
     hop = int(round(clip_len * (1.0 - overlap)))
