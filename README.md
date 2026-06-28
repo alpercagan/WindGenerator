@@ -1,6 +1,6 @@
 # WindGenerator
 
-A study in learning representations of environmental sound — specifically, whether a diffusion model trained on mel spectrograms can capture the statistical structure of wind well enough to generate new, perceptually convincing instances.
+Can a diffusion model trained on mel spectrograms learn the structure of wind well enough to generate new wind sounds that actually sound like wind? That is the question this project tests.
 
 [![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/alperarslan19/WindGenerator/blob/main/notebooks/wind_generator_demo.ipynb)
 
@@ -13,208 +13,197 @@ A study in learning representations of environmental sound — specifically, whe
 ---
 
 
-## Motivation
 
-Wind is an acoustically unusual signal. Unlike speech or music, it has no pitch, no rhythm, no harmonic structure, and no semantic content. It is, in a physical sense, shaped noise: broadband turbulent energy filtered by the environment. A model that learns to generate wind cannot rely on memorizing melodic patterns or phonetic sequences. It has to learn something about the underlying generative process — how energy distributes across frequencies and how that distribution evolves over time.
+## Why wind?
 
-This makes wind a good test case for a specific question: can a generative model learn the statistical structure of a natural acoustic texture from data alone, without any signal processing rules or hand-crafted features?
+Wind is an unusual signal to model. It has no pitch, no rhythm, no harmonics, and no meaning. Physically it is shaped noise: broadband turbulent energy filtered by whatever it moves through. A model cannot cheat by memorizing a melody or a phrase. To produce wind it has to capture how energy is spread across frequencies and how that spread changes over time.
 
-The approach taken here is to treat audio as a visual problem. By converting recordings to mel spectrograms — 2D arrays that encode frequency and time — the problem becomes one of learning a distribution over images. Standard image generative architectures then apply directly.
+That makes it a clean test of a single question: can a generative model pick up the statistics of a natural texture from data alone, with no hand-written signal-processing rules?
+
+The approach is to treat the sound as an image. Each clip becomes a mel spectrogram, a 2D array of frequency against time, so the task turns into learning a distribution over images. A standard image model then applies without changes.
+
+
+The mel spectrogram
+
+A mel spectrogram is a 2D picture of sound. The horizontal axis is time, the vertical axis is frequency. The frequency axis uses the mel scale, which gives more resolution to low frequencies and less to high ones, closer to how we hear.
+
+Each 5.12-second clip at 22,050 Hz becomes a (128, 440) array: 128 frequency bins, 440 time frames. To the model this is just a grayscale image, 128 tall and 440 wide.
+
+How a clip becomes this image:
+
+
+STFT. The waveform is cut into overlapping windows and each window is Fourier-transformed. Window length is 1024 samples (~46 ms); the window steps forward 256 samples (~12 ms) each time, so consecutive frames overlap by 75%.
+Power, phase dropped. I keep the magnitude (squared) and discard the phase. This matters later: throwing away phase is exactly why reconstruction needs Griffin-Lim.
+Mel projection. The linear frequency bins are collapsed onto 128 mel bins.
+Log. Raw energy spans several orders of magnitude (a quiet bin near 0.00001, a loud one near 100). Taking the log compresses that range into something gradient descent can work with, and it also matches how loudness is perceived.
+Normalize. See below.
+
+
+Steps 1–3 are done by torchaudio's MelSpectrogram. Steps 4–5 are mine.
 
 ---
 
-## What Is a Mel Spectrogram?
-
-A mel spectrogram is a 2D representation of sound. The horizontal axis is time; the vertical axis is frequency, scaled to approximate the resolution of human auditory perception (the "mel scale," which has finer resolution at low frequencies and coarser resolution at high frequencies). Each value in the array represents the energy at a given frequency and time.
-
-For this project, each 5.12-second audio clip at 22,050 Hz is converted to a `(128, 440)` matrix: 128 mel frequency bins, and one time frame per 256 audio samples (440 frames total).
-
-From the model's perspective, this is a grayscale image — 128 pixels tall, 440 pixels wide. The U-Net backbone processes it exactly as it would process any image.
-
-**Why log scaling?** Raw spectrogram energy spans several orders of magnitude — very quiet frequencies might have energy 0.00001 while loud frequencies reach 100.0. This range is hostile to gradient-based optimization. Taking the logarithm compresses the range into something the model can learn from, and also better reflects how human perception of loudness works (roughly logarithmic).
-
-**Why the mel scale?** Linear frequency resolution allocates equal bins to equal Hz intervals, which underrepresents the low-frequency range where most perceptually important variation occurs. The mel scale concentrates bins where they matter perceptually.
-
----
 
 ## Dataset
-
-1,966 wind audio clips, each 5.12 seconds, 22,050 Hz mono.
-
+ 
+1,966 wind clips, each 5.12 seconds, 22,050 Hz, mono.
+ 
 **[Wind Sounds Dataset on Kaggle →](https://www.kaggle.com/datasets/alperaanarslan/wind-sounds-dataset)**
-
-Clips were segmented from longer recordings and filtered to remove silence, non-wind content, and clips with unusually low RMS energy. The `outputs/audit/` directory contains a quality analysis: RMS distributions, peak level histograms, reconstruction error statistics, and 30 representative samples selected across the quality range.
-
-**Mel configuration:**
-
-| Parameter | Value | Rationale |
+ 
+The clips were cut from longer recordings and filtered to drop silence, non-wind content, and clips with very low RMS energy. `outputs/audit/` holds the quality check: RMS and peak histograms, reconstruction-error stats, and 30 sample clips spread across the quality range.
+ 
+| Parameter | Value | Why |
 |---|---|---|
-| Sample rate | 22,050 Hz | Standard for audio ML; captures frequencies up to 11,025 Hz |
-| FFT size | 1,024 | ~46ms window; good balance of time and frequency resolution |
-| Hop length | 256 | ~12ms between frames; 440 frames per 5.12s clip |
-| Mel bins | 128 | Standard; enough resolution without excessive dimensionality |
-| Frequency range | 20 Hz – 11,025 Hz | Covers audible wind range |
-
-### Global Normalization
-
-After computing log-mel spectrograms, values are normalized using statistics computed over the entire dataset:
-
+| Sample rate | 22,050 Hz | Standard for audio ML; covers up to 11,025 Hz |
+| FFT size | 1,024 | ~46 ms window; reasonable time/frequency trade-off |
+| Hop length | 256 | ~12 ms between frames; 440 frames per clip |
+| Mel bins | 128 | Enough resolution without blowing up dimensionality |
+| Frequency range | 20 Hz – 11,025 Hz | Covers the audible wind range |
+ 
+### Normalization
+ 
+After taking the log, every spectrogram is normalized with statistics computed once over the dataset:
+ 
 ```
 x_normalized = clip((x - mean) / std, -4, 4) / 4
 ```
-
-This maps values to approximately `[-1, 1]`, which is the range diffusion models expect.
-
-A critical design decision here was to use **global statistics** (one mean and std for the entire dataset) rather than per-clip statistics. Early in the project, per-clip normalization caused a distribution mismatch when connecting the diffusion model to the reconstruction stage: the diffusion model was trained on one normalization distribution, the reconstruction used another, and the outputs were incoherent.
-
-Global normalization ensures that any spectrogram — whether from the dataset or generated by the diffusion model — lives in the same numerical space. This is a general requirement for any modular pipeline where components are trained independently and then composed.
-
-Global statistics are stored in `outputs/mel_stats.json` and loaded by all pipeline components.
-
+ 
+This puts values roughly in `[-1, 1]`, which is the range diffusion models expect.
+ 
+The important choice is that `mean` and `std` are **global** (one pair for the whole dataset), not per-clip. Per-clip normalization caused a problem early on: the diffusion model learned one normalization, the audio reconstruction assumed another, and the two did not line up, so the output was incoherent. With one shared mean/std, every spectrogram lives in the same numerical space, whether it comes from the dataset or from the model. The stats are computed from a sample of clips (median of their per-clip mean and std), saved to `outputs/mel_stats.json`, and read by every part of the pipeline.
+ 
 ---
-
-## Diffusion Model
-
-### Why Diffusion?
-
-A diffusion model learns to generate samples from a data distribution by learning to reverse a noise process. During training, Gaussian noise is progressively added to real data across many timesteps; the model learns to denoise. At inference, the model starts from pure noise and iteratively denoises toward a sample that looks like it came from the training distribution.
-
-For wind, this approach has a specific advantage. Wind is a stochastic texture — it has no fixed "shape" that can be memorized. A diffusion model doesn't try to find a single correct output; it learns the distribution of possible outputs and samples from it. This matches the nature of the signal.
-
-An alternative would have been a VAE-based latent diffusion model (like Stable Audio or AudioLDM). That approach compresses audio to a latent space first, then runs diffusion in that compressed space — more efficient, but requiring two training stages and a more complex architecture. For a first experiment, spectrogram diffusion is a more direct test of the core hypothesis.
-
+ 
+## The diffusion model
+ 
+### Why diffusion
+ 
+A diffusion model generates by learning to reverse a noising process. During training, Gaussian noise is added to real data at a random level, and the model learns to predict that noise. At generation time it starts from pure noise and removes a little at a time until something that looks like real data is left.
+ 
+This fits wind well. Wind has no single correct shape to memorize; it is a stochastic texture. A diffusion model does not try to produce one right answer, it learns the distribution of possibilities and draws from it. The training setup also gives free variety: the same clip is seen at a different noise level and with different noise every time it comes up, so even with under 2,000 clips the model does not simply memorize them.
+ 
+A latent diffusion model (compress first, then diffuse in the smaller space, as in AudioLDM or Stable Audio) would be more efficient, but it needs two training stages. For a first experiment, running diffusion directly on the spectrogram is a more direct test of the idea.
+ 
 ### Architecture
-
-A `UNet2DModel` from the Hugging Face Diffusers library, treating the mel spectrogram as a single-channel image.
-
+ 
+A `UNet2DModel` from the Hugging Face Diffusers library, with the spectrogram as a single-channel image. The architecture comes from the library; I picked the configuration and trained the weights from scratch (no pretrained checkpoint).
+ 
 | Parameter | Value |
 |---|---|
-| Input/output shape | `(1, 128, 440)` |
+| Input / output shape | `(1, 128, 440)` |
 | Channel widths | `(32, 64, 128)` |
 | Levels | 3 |
 | Blocks per level | 1 |
 | Total parameters | ~2.5M |
-
-The architecture is intentionally small. A larger model would in principle learn a better distribution, but the constraint of training on a single T4 GPU in a Colab session (12-hour limit) imposed a practical ceiling. The 2.5M parameter model trains at ~180ms/step, completing 74,000 steps in approximately 4 hours.
-
-Channel widths `(32, 64, 128)` rather than the larger `(64, 128, 256)` were chosen after timing experiments showed the larger model was 10× slower without proportional quality improvement given the dataset size.
-
+ 
+The down and up paths are convolution-only; the bottleneck keeps one self-attention layer. For a stationary texture like wind there is little long-range structure to coordinate, so I kept the model small and shallow on purpose.
+ 
+The model is intentionally small. A bigger model would in principle fit the distribution better, but a single T4 GPU in a Colab session (12-hour limit) sets a practical ceiling. At ~2.5M parameters it trains at about 180 ms/step, so 74,000 steps take roughly 4 hours. I tried the larger `(64, 128, 256)` widths; they ran about 10× slower without a matching gain in quality for this dataset size, so I stayed with `(32, 64, 128)`.
+ 
 ### Training
-
-**Objective:** The standard DDPM denoising objective — at each training step, a random timestep `t` is sampled, noise is added to a real spectrogram accordingly, and the model is trained to predict the noise:
-
+ 
+At each step a random timestep `t` is drawn, the spectrogram is noised to that level with `add_noise` (which applies `sqrt(alpha_bar)*x0 + sqrt(1-alpha_bar)*noise`), and the model predicts the noise:
+ 
 ```
 loss = MSE(model(x_t, t), noise)
 ```
-
-**Scheduler:** DDPMScheduler with 1,000 timesteps, linear noise schedule.
-
-**Optimizer:** AdamW, lr=2e-4.
-
-**Mixed precision:** `torch.amp.autocast('cuda')` with GradScaler — approximately 2× speedup over fp32.
-
-**Training duration:** 74,000 steps (Colab session limit reached; 100k was the target).
-
-**Checkpoints:** Saved every 1,000 steps to Google Drive for persistence across sessions.
-
-A key practical challenge was training across multiple interrupted Colab sessions. Each session wipes the working directory on termination. The solution was to save numbered checkpoints to Google Drive after each save interval; at the start of each new session, training was resumed manually from the latest saved checkpoint. This allowed training to continue from where it left off across multiple sessions.
-
-### Inference
-
-At inference, the model runs 50 DDPM denoising steps by default (configurable via `--ddpm_steps`), starting from a Gaussian noise tensor of shape `(1, 128, 440)`. The output is a normalized mel spectrogram in `[-1, 1]`, which is then denormalized and converted to audio.
+ 
+- **Scheduler:** DDPMScheduler, 1,000 timesteps, linear noise schedule.
+- **Optimizer:** AdamW, lr = 2e-4.
+- **Mixed precision:** `autocast` plus `GradScaler`, about 2× faster than fp32. Gradients are clipped to a max norm of 1.0.
+- **Length:** 74,000 steps. The target was 100k; the Colab session ended first.
+Training ran across several interrupted Colab sessions. Each session wipes the working directory, so I saved numbered checkpoints to Google Drive on a fixed interval and resumed from the latest one at the start of each session.
+ 
+### Generating
+ 
+To generate, the model starts from a `(1, 128, 440)` noise tensor and runs the DDPM reverse process (50 steps by default, set with `--ddpm_steps`). The output is a normalized mel spectrogram in `[-1, 1]`, which is then denormalized with the same global stats and turned back into audio.
+ 
 ---
-
-## Audio Reconstruction: Griffin-Lim
-
-The diffusion model generates a mel spectrogram — a magnitude representation of the audio. Converting this back to a waveform requires reconstructing phase information that was discarded when computing the spectrogram.
-
-**Griffin-Lim** is a classical iterative algorithm for this. It starts from the target magnitude spectrogram and an initial random phase estimate, then iteratively refines the phase by projecting between the space of spectrograms consistent with the magnitude and the space of valid STFTs. After enough iterations, it converges to a waveform whose spectrogram magnitude matches the target.
-
-The limitation is well-understood: Griffin-Lim tends toward phase solutions that minimize reconstruction error in aggregate, which produces a characteristic metallic or phasiness quality. This is not a failure of the learned spectrogram — it is a limitation of phase reconstruction from magnitude alone.
-
-The pipeline uses `InverseMelScale` (to map 128 mel bins back to 513 STFT bins) followed by `GriffinLim` with 64 iterations.
-
-**What Griffin-Lim confirms:** If the diffusion model's output spectrogram is incoherent or structurally wrong, Griffin-Lim will produce noise. The fact that it produces recognizable wind confirms the model has learned the spectral structure of wind.
-
-### Toward Better Reconstruction
-
-The natural next step is a neural vocoder: a network trained to convert mel spectrograms to waveforms directly, learning phase relationships implicitly. Standard vocoders (HiFi-GAN, WaveGlow) are trained on speech and import speech-specific inductive biases. A vocoder trained on the same wind dataset would in principle produce cleaner output.
-
-Training a vocoder on the wind dataset itself is documented as the main direction for future work.
+ 
+## Getting audio back: Griffin-Lim
+ 
+The model produces a mel spectrogram, which is a magnitude-only representation. Turning it back into a waveform means recovering the phase that was thrown away when the spectrogram was computed.
+ 
+**Griffin-Lim** does this. It starts from the target magnitude and a random phase guess, then iterates back and forth between valid waveforms and the target magnitude until the phase settles. The pipeline first maps the 128 mel bins back to 513 STFT bins (`InverseMelScale`), then runs `GriffinLim` for 64 iterations.
+ 
+This is the weakest part of the pipeline. Griffin-Lim settles on a phase that minimizes error on average, which leaves a slightly metallic, "phasey" sound. That artifact comes from phase reconstruction, not from the spectrogram itself: the fact that recognizable wind comes out at all is the sign that the model learned the spectral structure. If the model's output were structurally wrong, Griffin-Lim would just produce noise.
+ 
+### Next step
+ 
+The cleaner fix is a neural vocoder: a network that maps mel spectrograms straight to waveforms and learns phase on its own. Off-the-shelf vocoders (HiFi-GAN, WaveGlow) are trained on speech and carry speech-specific assumptions, so a vocoder trained on this wind data should do better. That is the main direction for future work.
+ 
 ---
-
+ 
 ## Results
-
-Generated audio samples are available in the [v0.1 release](https://github.com/alperarslan19/WindGenerator/releases/tag/v0.1-audio-samples).
-
-The outputs demonstrate that the diffusion model has learned the spectral structure of wind: the broadband texture, low-frequency energy distribution, and temporal variation characteristic of wind recordings are present. The metallic quality is attributable to Griffin-Lim phase reconstruction, not to the learned representation.
-
-Some generated clips are more coherent than others — this reflects the stochastic nature of diffusion sampling and the fact that training was stopped at 74k rather than 100k steps.
-
+ 
+Samples are in the [v0.1 release](https://github.com/alperarslan19/WindGenerator/releases/tag/v0.1-audio-samples).
+ 
+The outputs have the things that make wind sound like wind: broadband texture, energy concentrated at low frequencies, and slow variation over time. The metallic edge is from Griffin-Lim, not from what the model learned. Some clips hold together better than others, which is expected given that sampling is stochastic and training stopped at 74k rather than 100k steps.
+ 
 ---
-
-## Repository Structure
-
+ 
+## Repository structure
+ 
 ```
 WindGenerator/
 ├── src/windgen/
-│   ├── mels.py              — LogMelExtractor, global normalization
-│   ├── dataset.py           — WindMelDataset, on-the-fly mel computation
-│   └── config.py            — MelSpecConfig, DatasetConfig
+│   ├── mels.py              — log-mel extraction, global normalization
+│   ├── dataset.py           — dataset, on-the-fly mel computation
+│   └── config.py            — mel and dataset config
 ├── scripts/
 │   ├── prepare_dataset.py   — segmentation and silence filtering
 │   ├── compute_mel_stats.py — global normalization statistics
 │   ├── audit_dataset.py     — dataset quality analysis
 │   ├── train_diffusion.py   — DDPM training
-│   └── generate_audio.py   — end-to-end inference
+│   └── generate_audio.py    — end-to-end generation
 ├── notebooks/
-│   └── wind_generator_demo.ipynb — Colab demo notebook
+│   └── wind_generator_demo.ipynb
 └── outputs/
     ├── mel_stats.json        — global normalization statistics
-    ├── audit/                — dataset quality analysis and samples
-    └── inspect/              — mel spectrogram visualizations
+    ├── audit/                — quality analysis and samples
+    └── inspect/              — spectrogram visualizations
 ```
-
+ 
 ---
-
+ 
 ## Usage
-
-**Generate wind audio (pretrained model required):**
+ 
+**Generate wind audio (needs a trained checkpoint):**
 ```bash
 python scripts/generate_audio.py \
     --diffusion_ckpt path/to/checkpoint.pt \
     --mel_stats outputs/mel_stats.json \
     --output_dir outputs/generated \
     --num_clips 5 \
-    --ddpm_steps 100
+    --ddpm_steps 50
 ```
-
+ 
 **Train from scratch:**
 ```bash
-# 1. Prepare dataset
+# 1. Prepare the dataset
 python scripts/prepare_dataset.py --input_dir /path/to/raw_audio
-
+ 
 # 2. Compute global mel statistics
 python scripts/compute_mel_stats.py
-
-# 3. Train diffusion model
+ 
+# 3. Train
 python scripts/train_diffusion.py \
     --data_dir /path/to/clips \
     --mel_stats outputs/mel_stats.json \
     --output_dir outputs/train_ddpm \
     --max_steps 100000
 ```
-
+ 
 **Requirements:** Python 3.10+, PyTorch 2.0+, torchaudio, diffusers, soundfile
-
+ 
 ```bash
 pip install -e .
 ```
-
+ 
 ---
-
+ 
 ## References
-
+ 
 - Ho et al., [Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2006.11239) (NeurIPS 2020)
-- Kong et al., [HiFi-GAN: Generative Adversarial Networks for Efficient and High Fidelity Speech Synthesis](https://arxiv.org/abs/2010.05646) (NeurIPS 2020)
+- Kong et al., [HiFi-GAN](https://arxiv.org/abs/2010.05646) (NeurIPS 2020)
 - Griffin & Lim, [Signal Estimation from Modified Short-Time Fourier Transform](https://ieeexplore.ieee.org/document/1164317) (IEEE TASSP 1984)
