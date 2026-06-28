@@ -24,7 +24,6 @@ class MelSpecConfig:
 
 
 def _validate_mel_config(stored: dict, cfg: "MelSpecConfig") -> None:
-    """Raise ValueError if stored mel_stats.json config differs from cfg."""
     f_max_cfg = cfg.f_max if cfg.f_max is not None else cfg.sr / 2
     expected = {
         "sr": cfg.sr,
@@ -74,10 +73,6 @@ def create_mel_transform(cfg: MelSpecConfig, device: torch.device) -> torchaudio
 
 
 def load_wav_mono_resample(path: str | Path, target_sr: int) -> torch.Tensor:
-    """
-    Returns mono waveform as torch.float32 tensor of shape (T,).
-    Uses soundfile for decoding (no torchcodec dependency).
-    """
     x, sr = sf.read(str(path), dtype="float32", always_2d=True)  # (T, C)
     x = x.mean(axis=1)  # mono
     wav = torch.from_numpy(x)  # (T,)
@@ -90,14 +85,6 @@ def load_wav_mono_resample(path: str | Path, target_sr: int) -> torch.Tensor:
 
 
 class LogMelExtractor:
-    """
-    Produces normalized log-mel in ~[-1, 1].
-
-    Two modes:
-    - normalization="global": uses mu/sigma from mel_stats.json (Path A)
-    - normalization="per_clip": uses each clip's own mean/std (old behavior)
-    """
-
     def __init__(
         self,
         config: MelSpecConfig,
