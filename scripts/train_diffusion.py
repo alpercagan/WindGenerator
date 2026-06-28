@@ -1,23 +1,4 @@
 #!/usr/bin/env python3
-"""
-train_diffusion.py
-
-DDPM training on log-mel "images".
-
-Key features:
-- Fixed mel shape: (1, 128, 440)
-- Lightweight ~2.5M parameter UNet
-- Mixed-precision training (AMP) on CUDA
-- Periodic checkpoint saving
-
-Run:
-  python scripts/train_diffusion.py
-
-Outputs:
-  outputs/train_ddpm/
-    samples_step_000100.png ...
-    ckpt_step_001000.pt ...
-"""
 
 from __future__ import annotations
 
@@ -87,7 +68,7 @@ if __name__ == "__main__":
         win_length=1024,
         n_mels=128,
     )
-    target_frames = 440  # divisible by 8 for 3 downsamples
+    target_frames = 440  
 
     ds = WindMelDataset(
         DatasetConfig(data_dir=data_dir, mel_stats_relpath=args.mel_stats),
