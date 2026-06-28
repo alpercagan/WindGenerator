@@ -1,30 +1,5 @@
 #!/usr/bin/env python3
-"""
-audit_dataset.py
 
-Audit a prepared wind dataset.
-
-Expected layout:
-  <data_dir>/
-    clips/
-      wind_000001.wav ...
-    metadata.csv
-
-Outputs to:
-  <repo_root>/outputs/audit/
-    audit_summary.txt
-    audit_report.csv
-    audit_hist_rms.png
-    audit_hist_peak.png
-    audit_source_counts.csv
-    audit_samples/  (optional)
-
-Usage:
-  python scripts/audit_dataset.py --data_dir ~/Datasets/wind_clean --num_listen 30
-
-Optional deep check:
-  python scripts/audit_dataset.py --data_dir ~/Datasets/wind_clean --recompute_audio_stats --limit_audio_scan 300
-"""
 
 from __future__ import annotations
 
