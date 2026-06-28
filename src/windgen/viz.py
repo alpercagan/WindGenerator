@@ -7,10 +7,6 @@ import torch
 
 
 def save_mel_grid(mels: torch.Tensor, out_path: Path, title: str = "") -> None:
-    """
-    mels: (B, 1, 128, T) in roughly [-1, 1]
-    Saves a vertical grid of up to 8 mels.
-    """
     out_path.parent.mkdir(parents=True, exist_ok=True)
     m = mels.detach().cpu().numpy()
     b = min(m.shape[0], 8)
